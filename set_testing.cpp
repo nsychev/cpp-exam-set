@@ -332,6 +332,22 @@ TEST(correctness, swap_empty1) {
     EXPECT_TRUE(c2.empty());
 }
 
+TEST(correctness, reinsert) {
+    set<int> c;
+    mass_push_back(c, {6, 8, 1, 2, 3, 4});
+    std::cout << *c.find(6) << std::endl;
+    c.erase(c.find(6));
+    c.insert(6);
+    auto it = c.begin();
+    EXPECT_TRUE(*it++ == 1);
+    EXPECT_TRUE(*it++ == 2);
+    EXPECT_TRUE(*it++ == 3);
+    EXPECT_TRUE(*it++ == 4);
+    EXPECT_TRUE(*it++ == 6);
+    EXPECT_TRUE(*it++ == 8);
+    EXPECT_TRUE(it == c.end());
+}
+
 TEST(correctness, swap_empty_empty) {
     set<int> c1, c2;
     swap(c1, c2);
