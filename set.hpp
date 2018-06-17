@@ -112,18 +112,8 @@ public:
         }
     }
 
-    set& operator=(set const& other) {
-        root = std::make_shared<node>();
-        _size = 0;
-
-        try {
-            for (auto &e: other)
-                insert(e);
-        } catch (...) {
-            clear();
-            throw;
-        }
-
+    set& operator=(set other) {
+        swap(*this, other);
         return *this;
     }
 
