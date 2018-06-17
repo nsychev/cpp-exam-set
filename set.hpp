@@ -248,6 +248,8 @@ public:
 
             if (v->right)
                 v->right->parent = p;
+
+            v->right = nullptr;
         } else if (!v->right) {
             if (p->left == v)
                 p->left = v->left;
@@ -256,6 +258,8 @@ public:
 
             if (v->left)
                 v->left->parent = p;
+
+            v->left = nullptr;
         } else {
             ++it;
             node *next = it.ptr;
@@ -292,7 +296,12 @@ public:
                 next->left = v->left;
                 next->right = v->right;
             }
+
+            v->left = nullptr;
+            v->right = nullptr;
         }
+
+        delete v;
 
         return result;
     }
