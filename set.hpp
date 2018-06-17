@@ -32,8 +32,8 @@ public:
             return ptr.get()->data.value();
         }
 
-        T const& operator->() const {
-            return ptr.get()->data.value();
+        T const* operator->() const {
+            return &ptr.get()->data.value();
         }
 
         iterator operator++() {
@@ -123,6 +123,8 @@ public:
             clear();
             throw;
         }
+
+        return *this;
     }
 
     ~set() = default;
