@@ -17,8 +17,10 @@ private:
         node(T const& value, node* parent): data(value), parent(parent) {};
 
         ~node() {
-            delete left;
-            delete right;
+            if (left)
+                delete left;
+            if (right)
+                delete right;
         }
     };
 
@@ -315,6 +317,7 @@ public:
     }
 
     void clear() {
+        root.~node();
         root = node();
         _size = 0;
     }
