@@ -232,10 +232,6 @@ public:
     }
 
     iterator erase(const_iterator it) {
-        if (it.ptr == root) {
-            throw std::runtime_error("trying to delete root");
-        }
-
         --_size;
 
         iterator result = it;
