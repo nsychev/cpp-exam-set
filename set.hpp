@@ -33,7 +33,7 @@ public:
         }
 
         T const* operator->() const {
-            return &ptr.get()->data.value();
+            return &(ptr.get()->data.value());
         }
 
         iterator operator++() {
