@@ -4,7 +4,6 @@
 #include <utility>
 #include <type_traits>
 #include <iterator>
-#include <memory>
 #include <optional>
 
 template<typename T>
@@ -12,28 +11,30 @@ struct set {
 private:
     struct node {
         std::optional<T> data;
-        std::shared_ptr<node> left, right;
-        std::weak_ptr<node> parent;
+        node *left = nullptr, *right = nullptr, *parent = nullptr;
 
         node() = default;
-        node(T const& value, std::shared_ptr<node>& parent): data(value), parent(parent) {};
+        node(T const& value, node* parent): data(value), parent(parent) {};
 
-        ~node() = default;
+        ~node() {
+            delete left;
+            delete right;
+        }
     };
 
     size_t _size;
-    std::shared_ptr<node> root;
+    node root;
 public:
     struct iterator: public std::iterator<std::bidirectional_iterator_tag, T const> {
         iterator(): ptr(nullptr) {}
-        iterator(std::shared_ptr<node> const& ptr): ptr(ptr) {}
+        iterator(node* ptr): ptr(ptr) {}
 
         T const& operator*() const {
-            return ptr.get()->data.value();
+            return ptr->data.value();
         }
 
         T const* operator->() const {
-            return &(ptr.get()->data.value());
+            return &(ptr->data.value());
         }
 
         iterator operator++() {
@@ -42,11 +43,11 @@ public:
                 while (ptr->left)
                     ptr = ptr->left;
             } else {
-                std::shared_ptr<node> w = ptr;
-                ptr = ptr->parent.lock();
+                node *w = ptr;
+                ptr = ptr->parent;
                 while (ptr && ptr->right == w) {
                     w = ptr;
-                    ptr = ptr->parent.lock();
+                    ptr = ptr->parent;
                 }
 
             }
@@ -60,11 +61,11 @@ public:
                 while (ptr->right)
                     ptr = ptr->right;
             } else {
-                std::shared_ptr<node> w = ptr;
-                ptr = ptr->parent.lock();
+                node *w = ptr;
+                ptr = ptr->parent;
                 while (ptr && ptr->left == w) {
                     w = ptr;
-                    ptr = ptr->parent.lock();
+                    ptr = ptr->parent;
                 }
             }
 
@@ -91,7 +92,7 @@ public:
             return a.ptr != b.ptr;
         }
     private:
-        std::shared_ptr<node> ptr;
+        node *ptr;
 
         friend class set;
     };
@@ -100,7 +101,7 @@ public:
     typedef std::reverse_iterator<iterator> reverse_iterator;
     typedef reverse_iterator const_reverse_iterator;
 
-    set(): _size(0), root(std::make_shared<node>()) {}
+    set(): _size(0), root() {}
 
     set(const set& other): set() {
         try {
@@ -120,7 +121,7 @@ public:
     ~set() = default;
 
     const_iterator begin() const {
-        std::shared_ptr<node> ptr = root;
+        node *ptr = const_cast<node*>(&root);
         while (ptr->left)
             ptr = ptr->left;
         return ptr;
@@ -131,7 +132,7 @@ public:
     }
 
     const_iterator end() const {
-        return const_iterator(root);
+        return const_iterator(const_cast<node*>(&root));
     }
 
     const_iterator cend() const {
@@ -152,14 +153,14 @@ public:
     }
 
     std::pair<iterator, bool> insert(T const& value) {
-        std::shared_ptr<node> v = root;
+        node *v = &root;
 
         while (true) {
             if (!v->data || value < v->data) {
                 if (v->left) {
                     v = v->left;
                 } else {
-                    v->left = std::make_shared<node>(value, v);
+                    v->left = new node(value, v);
                     ++_size;
                     return std::make_pair(iterator(v->left), true);
                 }
@@ -167,7 +168,7 @@ public:
                 if (v->right) {
                     v = v->right;
                 } else {
-                    v->right = std::make_shared<node>(value, v);
+                    v->right = new node(value, v);
                     ++_size;
                     return std::make_pair(iterator(v->right), true);
                 }
@@ -178,7 +179,7 @@ public:
     }
 
     const_iterator find(T const& value) const {
-        std::shared_ptr<node> v = root;
+        node *v = const_cast<node*>(&root);
 
         while (v) {
             if (!v->data || value < v->data) {
@@ -190,11 +191,11 @@ public:
             }
         }
 
-        return root;
+        return const_cast<node*>(&root);
     }
 
     const_iterator lower_bound(T const& value) const {
-        std::shared_ptr<node> v = root;
+        node *v = const_cast<node*>(&root);
 
         while (true) {
             if (!v->data || value < v->data) {
@@ -214,7 +215,7 @@ public:
     }
 
     const_iterator upper_bound(T const& value) const {
-        std::shared_ptr<node> v = root;
+        node *v = const_cast<node*>(&root);
 
         while (true) {
             if (!v->data || value < v->data) {
@@ -237,8 +238,8 @@ public:
         iterator result = it;
         ++result;
 
-        std::shared_ptr<node> v = it.ptr;
-        std::shared_ptr<node> p = v->parent.lock();
+        node *v = it.ptr;
+        node *p = v->parent;
         if (!v->left) {
             if (p->left == v)
                 p->left = v->right;
@@ -257,9 +258,9 @@ public:
                 v->left->parent = p;
         } else {
             ++it;
-            std::shared_ptr<node> next = it.ptr;
+            node *next = it.ptr;
 
-            std::shared_ptr<node> next_parent = next->parent.lock();
+            node *next_parent = next->parent;
 
             if (next_parent == v) {
                 if (p->left == v)
@@ -305,13 +306,21 @@ public:
     }
 
     void clear() {
-        root = std::make_shared<node>();
+        root = node();
         _size = 0;
     }
 
     friend void swap(set<T>& a, set<T>& b) {
-        std::swap(a.root, b.root);
+        std::swap(a.root.data, b.root.data);
+        std::swap(a.root.left, b.root.left);
         std::swap(a._size, b._size);
+
+        if (a.root.left)
+            a.root.left->parent = &a.root;
+
+
+        if (b.root.left)
+            b.root.left->parent = &b.root;
     }
 };
 
