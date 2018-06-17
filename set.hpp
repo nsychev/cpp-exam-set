@@ -260,24 +260,37 @@ public:
             std::shared_ptr<node> next = it.ptr;
 
             std::shared_ptr<node> next_parent = next->parent.lock();
-            if (next_parent->left == next)
-                next_parent->left = next->right;
-            else
-                next_parent->right = next->right;
 
-            next->right->parent = next_parent;
+            if (next_parent == v) {
+                if (p->left == v)
+                    p->left = next;
+                else
+                    p->right = next;
 
-            v->left->parent = next;
-            v->right->parent = next;
-            next->parent = p;
+                v->left->parent = next;
+                next->parent = p;
+                next->left = v->left;
+            } else  {
+                if (next_parent->left == next)
+                    next_parent->left = next->right;
+                else
+                    next_parent->right = next->right;
 
-            if (p->left == v)
-                p->left = next;
-            else
-                p->right = next;
+                if (next->right)
+                    next->right->parent = next_parent;
 
-            next->left = v->left;
-            next->right = v->right;
+                v->left->parent = next;
+                v->right->parent = next;
+                next->parent = p;
+
+                if (p->left == v)
+                    p->left = next;
+                else
+                    p->right = next;
+
+                next->left = v->left;
+                next->right = v->right;
+            }
         }
 
         return result;
