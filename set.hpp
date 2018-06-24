@@ -185,7 +185,7 @@ public:
         return std::make_pair(iterator(v), true);
     }
 
-    const_iterator find(T const& value) const noexcept {
+    const_iterator find(T const& value) const {
         node *v = root.left;
 
         while (v) {
