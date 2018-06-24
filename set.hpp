@@ -117,7 +117,7 @@ public:
             for (auto &e: other)
                 insert(e);
         } catch (...) {
-            root.~base_node();
+            clear();
             throw;
         }
     }
@@ -327,8 +327,9 @@ public:
     }
 
     void clear() {
-        root.~base_node();
-        root = base_node();
+        if (root.left)
+            delete root.left;
+        root.left = nullptr;
         _size = 0;
     }
 
