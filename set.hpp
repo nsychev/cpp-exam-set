@@ -5,18 +5,17 @@
 #include <type_traits>
 #include <iterator>
 #include <optional>
+#include <cassert>
 
 template<typename T>
 struct set {
 private:
-    struct node {
-        std::optional<T> data;
-        node *left = nullptr, *right = nullptr, *parent = nullptr;
+    struct node;
 
-        node() = default;
-        node(T const& value, node* parent): data(value), parent(parent) {};
+    struct base_node {
+        node *left = nullptr, *right = nullptr;
 
-        ~node() {
+        ~base_node() {
             if (left)
                 delete left;
             if (right)
@@ -24,19 +23,27 @@ private:
         }
     };
 
+    struct node: base_node {
+        T data;
+        base_node *parent;
+
+        node() = delete;
+        node(T const& value, base_node* parent): data(value), parent(parent) {};
+    };
+
     size_t _size;
-    node root;
+    base_node root;
 public:
     struct iterator: public std::iterator<std::bidirectional_iterator_tag, T const> {
-        iterator(): ptr(nullptr) {}
-        iterator(node* ptr): ptr(ptr) {}
+        iterator() noexcept: ptr(nullptr) {}
+        iterator(base_node const* ptr) noexcept: ptr(ptr) {}
 
         T const& operator*() const {
-            return ptr->data.value();
+            return static_cast<node const*>(ptr)->data;
         }
 
         T const* operator->() const {
-            return &(ptr->data.value());
+            return &(static_cast<node const*>(ptr)->data);
         }
 
         iterator operator++() {
@@ -45,13 +52,12 @@ public:
                 while (ptr->left)
                     ptr = ptr->left;
             } else {
-                node *w = ptr;
-                ptr = ptr->parent;
+                base_node const* w = ptr;
+                ptr = static_cast<node const*>(ptr)->parent;
                 while (ptr && ptr->right == w) {
                     w = ptr;
-                    ptr = ptr->parent;
+                    ptr = static_cast<node const*>(ptr)->parent;
                 }
-
             }
 
             return *this;
@@ -63,11 +69,11 @@ public:
                 while (ptr->right)
                     ptr = ptr->right;
             } else {
-                node *w = ptr;
-                ptr = ptr->parent;
+                base_node const *w = ptr;
+                ptr = static_cast<node const*>(ptr)->parent;
                 while (ptr && ptr->left == w) {
                     w = ptr;
-                    ptr = ptr->parent;
+                    ptr = static_cast<node const*>(ptr)->parent;
                 }
             }
 
@@ -86,105 +92,104 @@ public:
             return other;
         }
 
-        friend bool operator==(iterator const& a, iterator const& b) {
+        friend bool operator==(iterator const& a, iterator const& b) noexcept {
             return a.ptr == b.ptr;
         }
 
-        friend bool operator!=(iterator const& a, iterator const& b) {
+        friend bool operator!=(iterator const& a, iterator const& b) noexcept {
             return a.ptr != b.ptr;
         }
     private:
-        node *ptr;
+        base_node const *ptr;
 
         friend class set;
     };
 
-    typedef iterator const_iterator;
-    typedef std::reverse_iterator<iterator> reverse_iterator;
-    typedef reverse_iterator const_reverse_iterator;
+    using const_iterator = iterator;
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = reverse_iterator;
 
-    set(): _size(0), root() {}
+    set() noexcept: _size(0), root() {
+    }
 
     set(const set& other): set() {
         try {
             for (auto &e: other)
                 insert(e);
         } catch (...) {
-            clear();
+            root.~base_node();
             throw;
         }
     }
 
-    set& operator=(set other) {
+    set& operator=(set other) noexcept {
         swap(*this, other);
         return *this;
     }
 
     ~set() = default;
 
-    const_iterator begin() const {
-        node *ptr = const_cast<node*>(&root);
+    const_iterator begin() const noexcept {
+        base_node const *ptr = &root;
         while (ptr->left)
             ptr = ptr->left;
         return ptr;
     }
 
-    const_iterator cbegin() const {
+    const_iterator cbegin() const noexcept {
         return begin();
     }
 
-    const_iterator end() const {
-        return const_iterator(const_cast<node*>(&root));
+    const_iterator end() const noexcept {
+        return &root;
     }
 
-    const_iterator cend() const {
+    const_iterator cend() const noexcept {
         return end();
     }
 
-    const_reverse_iterator rbegin() const {
+    const_reverse_iterator rbegin() const noexcept {
         return std::make_reverse_iterator(end());
     }
-    const_reverse_iterator crbegin() const {
+    const_reverse_iterator crbegin() const noexcept {
         return rbegin();
     }
-    const_reverse_iterator rend() const {
+    const_reverse_iterator rend() const noexcept {
         return std::make_reverse_iterator(begin());
     }
-    const_reverse_iterator crend() const {
+    const_reverse_iterator crend() const noexcept {
         return rend();
     }
 
     std::pair<iterator, bool> insert(T const& value) {
-        node *v = &root;
+        node *v = root.left;
+        base_node *p = &root;
 
-        while (true) {
-            if (!v->data || value < v->data) {
-                if (v->left) {
-                    v = v->left;
-                } else {
-                    v->left = new node(value, v);
-                    ++_size;
-                    return std::make_pair(iterator(v->left), true);
-                }
+        while (v) {
+            p = v;
+            if (value < v->data) {
+                v = v->left;
             } else if (v->data < value) {
-                if (v->right) {
-                    v = v->right;
-                } else {
-                    v->right = new node(value, v);
-                    ++_size;
-                    return std::make_pair(iterator(v->right), true);
-                }
+                v = v->right;
             } else {
                 return std::make_pair(iterator(v), false);
             }
         }
+
+        _size++;
+        if (p == &root || value < static_cast<node*>(p)->data) {
+            v = p->left = new node(value, p);
+        } else {
+            v = p->right = new node(value, p);
+        }
+        return std::make_pair(iterator(v), true);
     }
 
-    const_iterator find(T const& value) const {
-        node *v = const_cast<node*>(&root);
+    const_iterator find(T const& value) const noexcept {
+        node *v = root.left;
 
         while (v) {
-            if (!v->data || value < v->data) {
+            if (value < v->data) {
                 v = v->left;
             } else if (v->data < value) {
                 v = v->right;
@@ -193,16 +198,17 @@ public:
             }
         }
 
-        return const_cast<node*>(&root);
+        return &root;
     }
 
-    const_iterator lower_bound(T const& value) const {
-        node *v = const_cast<node*>(&root);
+    const_iterator lower_bound(T const& value) const noexcept {
+        node *v = root.left;
 
-        while (true) {
-            if (!v->data || value < v->data) {
-                if (!v->left)
+        while (v) {
+            if (value < v->data) {
+                if (!v->left) {
                     return v;
+                }
                 v = v->left;
             } else if (v->data < value) {
                 if (!v->right) {
@@ -214,15 +220,18 @@ public:
                 return v;
             }
         }
+
+        return &root;
     }
 
     const_iterator upper_bound(T const& value) const {
-        node *v = const_cast<node*>(&root);
+        node *v = root.left;
 
-        while (true) {
-            if (!v->data || value < v->data) {
-                if (!v->left)
+        while (v) {
+            if (value < v->data) {
+                if (!v->left) {
                     return v;
+                }
                 v = v->left;
             } else {
                 if (!v->right) {
@@ -232,6 +241,8 @@ public:
                 v = v->right;
             }
         }
+
+        return &root;
     }
 
     iterator erase(const_iterator it) {
@@ -240,35 +251,33 @@ public:
         iterator result = it;
         ++result;
 
-        node *v = it.ptr;
-        node *p = v->parent;
+        node *v = const_cast<node*>(static_cast<node const*>(it.ptr));
+        base_node *p = v->parent;
+
         if (!v->left) {
             if (p->left == v)
                 p->left = v->right;
             else
                 p->right = v->right;
 
-            if (v->right)
+            if (v->right) {
                 v->right->parent = p;
-
-            v->right = nullptr;
+                v->right = nullptr;
+            }
         } else if (!v->right) {
             if (p->left == v)
                 p->left = v->left;
             else
                 p->right = v->left;
 
-            if (v->left)
+            if (v->left) {
                 v->left->parent = p;
-
-            v->left = nullptr;
+                v->left = nullptr;
+            }
         } else {
-            ++it;
-            node *next = it.ptr;
-
-            node *next_parent = next->parent;
-
-            if (next_parent == v) {
+            node *next = const_cast<node*>(static_cast<node const*>(result.ptr));
+            assert(next->left == nullptr);
+            if (next->parent == v) {
                 if (p->left == v)
                     p->left = next;
                 else
@@ -277,14 +286,18 @@ public:
                 v->left->parent = next;
                 next->parent = p;
                 next->left = v->left;
-            } else  {
-                if (next_parent->left == next)
-                    next_parent->left = next->right;
-                else
-                    next_parent->right = next->right;
+            } else {
+                if (next->parent->left == next) {
+                    next->parent->left = next->right;
+                } else {
+                    next->parent->right = next->right;
+                }
 
                 if (next->right)
-                    next->right->parent = next_parent;
+                    next->right->parent = next->parent;
+
+                next->left = v->left;
+                next->right = v->right;
 
                 v->left->parent = next;
                 v->right->parent = next;
@@ -294,9 +307,6 @@ public:
                     p->left = next;
                 else
                     p->right = next;
-
-                next->left = v->left;
-                next->right = v->right;
             }
 
             v->left = nullptr;
@@ -317,19 +327,17 @@ public:
     }
 
     void clear() {
-        root.~node();
-        root = node();
+        root.~base_node();
+        root = base_node();
         _size = 0;
     }
 
     friend void swap(set<T>& a, set<T>& b) {
-        std::swap(a.root.data, b.root.data);
-        std::swap(a.root.left, b.root.left);
         std::swap(a._size, b._size);
+        std::swap(a.root.left, b.root.left);
 
         if (a.root.left)
             a.root.left->parent = &a.root;
-
 
         if (b.root.left)
             b.root.left->parent = &b.root;
